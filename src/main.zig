@@ -2,6 +2,18 @@ const std = @import("std");
 
 pub fn main() anyerror!void {
     const seed: i64 = -6813570004079006464;
+    const finder = PatternFinder{
+        .gen = GradientGenerator.overworldFloor(seed),
+        .pattern = &.{&.{
+            &.{ .bedrock, .bedrock, .bedrock },
+            &.{ .bedrock, .bedrock, .bedrock },
+            &.{ .bedrock, .bedrock, .bedrock },
+        }},
+    };
+    finder.search(-1000, -60, -1000, 1000, -60, 1000);
+}
+
+fn printArea(seed: i64) void {
     const gen = GradientGenerator.overworldFloor(seed);
 
     var y: i32 = -60;
@@ -25,6 +37,49 @@ pub fn main() anyerror!void {
         std.debug.print("\n\n", .{});
     }
 }
+
+pub const PatternFinder = struct {
+    gen: GradientGenerator,
+    // Layers along Y, rows along Z, columns along X
+    pattern: []const []const []const ?Block,
+
+    pub fn search(self: PatternFinder, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32) void {
+        const out = std.io.getStdOut().writer();
+        var z: i32 = z0;
+        while (z <= z1) : (z += 1) {
+            var x: i32 = x0;
+            while (x <= x1) : (x += 1) {
+                var y: i32 = y0;
+                while (y <= y1) : (y += 1) {
+                    if (self.check(x, y, z)) {
+                        out.print("{},{},{}\n", .{ x, y, z }) catch @panic("failed to write to stdout");
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn check(self: PatternFinder, x: i32, y: i32, z: i32) bool {
+        // TODO: evict the pharoahs from this evil pyramid of doom
+        for (self.pattern) |layer, py| {
+            for (layer) |row, pz| {
+                for (row) |block_opt, px| {
+                    if (block_opt) |block| {
+                        const block_at = self.gen.at(
+                            x + @intCast(i32, px),
+                            y + @intCast(i32, py),
+                            z + @intCast(i32, pz),
+                        );
+                        if (block != block_at) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+};
 
 pub const GradientGenerator = struct {
     rand: PosRandom,
@@ -138,7 +193,7 @@ pub const PosRandom = struct {
 
     pub fn at(self: PosRandom, x: i32, y: i32, z: i32) Random {
         var seed = @as(i64, x *% 3129871) ^ (@as(i64, z) *% 116129781) ^ y;
-        seed = seed *% seed *% 42317861 + seed * 0xb;
+        seed = seed *% seed *% 42317861 +% seed *% 0xb;
         return Random.init((seed >> 16) ^ self.seed);
     }
 };
