@@ -1,41 +1,29 @@
 const std = @import("std");
 
+// IF YOU WANT TO CHANGE THE PATTERN, DO THAT HERE!
+// Layers along Y, rows along Z, columns along X
+const pattern: []const []const []const ?Block = &.{&.{
+    &.{ .bedrock, .bedrock, .bedrock },
+    &.{ .bedrock, .bedrock, .bedrock },
+    &.{ .bedrock, .bedrock, .bedrock },
+}};
+
 pub fn main() anyerror!void {
-    const seed: i64 = -6813570004079006464;
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    var args = std.process.args();
+    std.debug.assert(args.skip());
+    const seed_str = try args.next(&arena.allocator) orelse return error.NotEnoughArgs;
+    const range_str = try args.next(&arena.allocator) orelse return error.NotEnoughArgs;
+    const seed = try std.fmt.parseInt(i64, seed_str, 10);
+    const range: i32 = try std.fmt.parseInt(u31, range_str, 10);
+
     const finder = PatternFinder{
         .gen = GradientGenerator.overworldFloor(seed),
-        .pattern = &.{&.{
-            &.{ .bedrock, .bedrock, .bedrock },
-            &.{ .bedrock, .bedrock, .bedrock },
-            &.{ .bedrock, .bedrock, .bedrock },
-        }},
+        .pattern = pattern,
     };
-    finder.search(-1000, -60, -1000, 1000, -60, 1000);
-}
-
-fn printArea(seed: i64) void {
-    const gen = GradientGenerator.overworldFloor(seed);
-
-    var y: i32 = -60;
-    while (y > -64) : (y -= 1) {
-        std.debug.print("Y{}\n", .{y});
-
-        var z: i32 = 0;
-        while (z < 16) : (z += 1) {
-            std.debug.print("| ", .{});
-            var x: i32 = 0;
-            while (x < 16) : (x += 1) {
-                const ch: u8 = switch (gen.at(x, y, z)) {
-                    .bedrock => 'x',
-                    .other => ' ',
-                };
-                std.debug.print("{c} ", .{ch});
-            }
-            std.debug.print("|\n", .{});
-        }
-
-        std.debug.print("\n\n", .{});
-    }
+    finder.search(-range, -60, -range, range, -60, range);
 }
 
 pub const PatternFinder = struct {
