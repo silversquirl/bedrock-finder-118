@@ -5,9 +5,21 @@ pub const PatternFinder = struct {
     // Layers along Y, rows along Z, columns along X
     pattern: []const []const []const ?Block,
 
-    pub fn search(self: PatternFinder, a: Point, b: Point, resultFn: fn (p: Point) void) void {
+    pub fn search(
+        self: PatternFinder,
+        a: Point,
+        b: Point,
+        comptime resultFn: fn (p: Point) void,
+        comptime progressFn: ?fn (count: u64, total: u64) void,
+    ) void {
+        const total: u64 = a.areaTo(b);
+        var count: u64 = 0;
         var it = a.iterTo(b);
         while (it.next()) |p| {
+            if (progressFn) |f| {
+                count += 1;
+                f(count, total);
+            }
             if (self.check(p)) {
                 resultFn(p);
             }
@@ -36,10 +48,21 @@ pub const PatternFinder = struct {
     }
 };
 
-pub const Point = struct {
+pub const Point = packed struct {
     x: i32,
     y: i32,
     z: i32,
+
+    pub fn fromV(vec: std.meta.Vector(3, i32)) Point {
+        return @bitCast(Point, vec);
+    }
+    pub fn v(self: Point) std.meta.Vector(3, i32) {
+        return @bitCast([3]i32, self);
+    }
+
+    pub fn areaTo(a: Point, b: Point) u64 {
+        return @reduce(.Mul, @intCast(std.meta.Vector(3, u64), b.v() - a.v()));
+    }
 
     pub fn iterTo(a: Point, b: Point) Iterator {
         return .{ .pos = a, .start = a, .end = b };

@@ -32,7 +32,7 @@ pub fn main() anyerror!void {
         .x = range,
         .y = -60,
         .z = range,
-    }, reportResult);
+    }, reportResult, null);
 }
 
 fn reportResult(p: bedrock.Point) void {
