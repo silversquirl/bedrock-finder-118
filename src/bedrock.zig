@@ -5,31 +5,25 @@ pub const PatternFinder = struct {
     // Layers along Y, rows along Z, columns along X
     pattern: []const []const []const ?Block,
 
-    pub noinline fn search(self: PatternFinder, a: Point, b: Point, resultFn: fn (p: Point) void) void {
-        var z: i32 = a.z;
-        while (z <= b.z) : (z += 1) {
-            var x: i32 = a.x;
-            while (x <= b.x) : (x += 1) {
-                var y: i32 = a.y;
-                while (y <= b.y) : (y += 1) {
-                    if (self.check(x, y, z)) {
-                        resultFn(.{ .x = x, .y = y, .z = z });
-                    }
-                }
+    pub fn search(self: PatternFinder, a: Point, b: Point, resultFn: fn (p: Point) void) void {
+        var it = a.iterTo(b);
+        while (it.next()) |p| {
+            if (self.check(p)) {
+                resultFn(p);
             }
         }
     }
 
-    pub noinline fn check(self: PatternFinder, x: i32, y: i32, z: i32) bool {
+    pub fn check(self: PatternFinder, p: Point) bool {
         // TODO: evict the pharoahs from this evil pyramid of doom
         for (self.pattern) |layer, py| {
             for (layer) |row, pz| {
                 for (row) |block_opt, px| {
                     if (block_opt) |block| {
                         const block_at = self.gen.at(
-                            x + @intCast(i32, px),
-                            y + @intCast(i32, py),
-                            z + @intCast(i32, pz),
+                            p.x + @intCast(i32, px),
+                            p.y + @intCast(i32, py),
+                            p.z + @intCast(i32, pz),
                         );
                         if (block != block_at) {
                             return false;
@@ -46,6 +40,35 @@ pub const Point = struct {
     x: i32,
     y: i32,
     z: i32,
+
+    pub fn iterTo(a: Point, b: Point) Iterator {
+        return .{ .pos = a, .start = a, .end = b };
+    }
+
+    pub const Iterator = struct {
+        pos: Point,
+        start: Point,
+        end: Point,
+
+        pub fn next(self: *Iterator) ?Point {
+            if (self.pos.y >= self.end.y - 1) {
+                self.pos.y = self.start.y;
+                if (self.pos.x >= self.end.x - 1) {
+                    self.pos.x = self.start.x;
+                    if (self.pos.z >= self.end.z - 1) {
+                        return null;
+                    } else {
+                        self.pos.z += 1;
+                    }
+                } else {
+                    self.pos.x += 1;
+                }
+            } else {
+                self.pos.y += 1;
+            }
+            return self.pos;
+        }
+    };
 };
 
 pub const GradientGenerator = struct {
