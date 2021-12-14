@@ -9,8 +9,9 @@ pub const PatternFinder = struct {
         self: PatternFinder,
         a: Point,
         b: Point,
-        comptime resultFn: fn (p: Point) void,
-        comptime progressFn: ?fn (count: u64, total: u64) void,
+        context: anytype,
+        comptime resultFn: fn (@TypeOf(context), Point) void,
+        comptime progressFn: ?fn (@TypeOf(context), count: u64, total: u64) void,
     ) void {
         const total: u64 = a.areaTo(b);
         var count: u64 = 0;
@@ -18,10 +19,10 @@ pub const PatternFinder = struct {
         while (it.next()) |p| {
             if (progressFn) |f| {
                 count += 1;
-                f(count, total);
+                f(context, count, total);
             }
             if (self.check(p)) {
-                resultFn(p);
+                resultFn(context, p);
             }
         }
     }
@@ -127,9 +128,9 @@ pub const GradientGenerator = struct {
     }
 
     pub fn overworldFloor(seed: i64) GradientGenerator {
-        var world_random = Random.init(seed);
+        var random = Random.initHash(seed, "minecraft:bedrock_floor", .xoroshiro);
         return GradientGenerator{
-            .rand = PosRandom.init(&world_random),
+            .rand = PosRandom.init(&random),
             .lower = .bedrock,
             .upper = .other,
             .lower_y = -64,
@@ -138,9 +139,9 @@ pub const GradientGenerator = struct {
     }
 
     pub fn netherFloor(seed: i64) GradientGenerator {
-        var world_random = Random.init(seed);
+        var random = Random.initHash(seed, "minecraft:bedrock_floor", .legacy);
         return GradientGenerator{
-            .rand = PosRandom.init(&world_random),
+            .rand = PosRandom.init(&random),
             .lower = .bedrock,
             .upper = .other,
             .lower_y = 0,
@@ -148,10 +149,9 @@ pub const GradientGenerator = struct {
         };
     }
     pub fn netherCeiling(seed: i64) GradientGenerator {
-        var world_random = Random.init(seed);
-        _ = world_random.next64(); // Discard floor seed
+        var random = Random.initHash(seed, "minecraft:bedrock_roof", .legacy);
         return GradientGenerator{
-            .rand = PosRandom.init(&world_random),
+            .rand = PosRandom.init(&random),
             .lower = .other,
             .upper = .bedrock,
             .lower_y = 122,
@@ -165,27 +165,100 @@ pub const Block = enum {
     other,
 };
 
-pub const Random = struct {
-    seed: i64,
+pub const Random = union(Random.Algorithm) {
+    legacy: u64,
+    xoroshiro: [2]u64,
 
-    const magic = 0x5DEECE66D;
-    const mask = ((1 << 48) - 1);
+    pub const Algorithm = enum { legacy, xoroshiro };
 
-    pub fn init(seed: i64) Random {
-        return .{ .seed = (seed ^ magic) & mask };
+    const lmagic = 0x5DEECE66D;
+    const lmask = ((1 << 48) - 1);
+
+    pub fn init(seed: i64, algo: Algorithm) Random {
+        return switch (algo) {
+            .legacy => .{ .legacy = (@bitCast(u64, seed) ^ lmagic) & lmask },
+            .xoroshiro => xoroshiroInit(seed128(seed)),
+        };
+    }
+
+    const xmagic0: u64 = 0x6a09e667f3bcc909;
+    const xmagic1: u64 = 0x9e3779b97f4a7c15;
+    fn xoroshiroInit(seed: [2]u64) Random {
+        if (seed[0] == 0 and seed[1] == 0) {
+            return .{ .xoroshiro = .{ xmagic1, xmagic0 } };
+        }
+        return .{ .xoroshiro = seed };
+    }
+    fn seed128(seed: i64) [2]u64 {
+        var lo = @bitCast(u64, seed) ^ xmagic0;
+        var hi = lo +% xmagic1;
+        return .{ mix(lo), mix(hi) };
+    }
+    fn mix(v: u64) u64 {
+        var x = v;
+        x = (x ^ (x >> 30)) *% 0xbf58476d1ce4e5b9;
+        x = (x ^ (x >> 27)) *% 0x94d049bb133111eb;
+        return x ^ (x >> 31);
+    }
+
+    pub fn initHash(seed: i64, str: []const u8, algo: Algorithm) Random {
+        var seeder = init(seed, algo);
+        switch (algo) {
+            .legacy => return init(
+                seeder.next64() ^ javaStringHash(str),
+                .legacy,
+            ),
+
+            .xoroshiro => {
+                var hash: [16]u8 = undefined;
+                std.crypto.hash.Md5.hash(str, &hash, .{});
+
+                const hseed = .{
+                    std.mem.readIntBig(u64, hash[0..8]),
+                    std.mem.readIntBig(u64, hash[8..]),
+                };
+
+                return xoroshiroInit(.{
+                    hseed[0] ^ @bitCast(u64, seeder.next64()),
+                    hseed[1] ^ @bitCast(u64, seeder.next64()),
+                });
+            },
+        }
     }
 
     pub fn next(self: *Random, bits: u6) i32 {
         std.debug.assert(bits <= 32);
-        self.seed = (self.seed *% magic +% 0xb) & mask;
-        return @truncate(i32, self.seed >> (48 - bits));
+        switch (self.*) {
+            .legacy => |*seed| {
+                seed.* = (seed.* *% lmagic +% 0xb) & lmask;
+                return @truncate(i32, @bitCast(i64, seed.*) >> (48 - bits));
+            },
+
+            .xoroshiro => {
+                const shift = @intCast(u6, @as(u7, 64) - bits);
+                const rbits = @bitCast(u64, self.next64());
+                return @intCast(i32, rbits >> shift);
+            },
+        }
     }
 
     pub fn next64(self: *Random) i64 {
-        const top: i64 = self.next(32);
-        const bottom: i64 = self.next(32);
-        const result = (top << 32) + bottom;
-        return result;
+        switch (self.*) {
+            .legacy => {
+                const top: i64 = self.next(32);
+                const bottom: i64 = self.next(32);
+                const result = (top << 32) + bottom;
+                return result;
+            },
+
+            .xoroshiro => |*s| {
+                const v = std.math.rotl(u64, s[0] +% s[1], 17) +% s[0];
+                s[1] ^= s[0];
+                s[0] = std.math.rotl(u64, s[0], 49) ^ s[1] ^ (s[1] << 21);
+                s[1] = std.math.rotl(u64, s[1], 28);
+                return @bitCast(i64, v);
+            },
+        }
     }
 
     pub fn nextf(self: *Random) f32 {
@@ -193,16 +266,42 @@ pub const Random = struct {
     }
 };
 
-pub const PosRandom = struct {
-    seed: i64,
+pub const PosRandom = union(Random.Algorithm) {
+    legacy: i64,
+    xoroshiro: [2]u64,
 
     pub fn init(world: *Random) PosRandom {
-        return .{ .seed = world.next64() };
+        return switch (world.*) {
+            .legacy => .{ .legacy = world.next64() },
+            .xoroshiro => .{
+                .xoroshiro = .{
+                    @bitCast(u64, world.next64()),
+                    @bitCast(u64, world.next64()),
+                },
+            },
+        };
     }
 
     pub fn at(self: PosRandom, x: i32, y: i32, z: i32) Random {
         var seed = @as(i64, x *% 3129871) ^ (@as(i64, z) *% 116129781) ^ y;
         seed = seed *% seed *% 42317861 +% seed *% 0xb;
-        return Random.init((seed >> 16) ^ self.seed);
+        seed >>= 16;
+
+        return switch (self) {
+            .legacy => |rseed| Random.init(seed ^ rseed, .legacy),
+            .xoroshiro => |rseed| Random.xoroshiroInit(.{
+                @bitCast(u64, seed) ^ rseed[0], rseed[1],
+            }),
+        };
     }
 };
+
+// Unicode strings not supported because I'm lazy and Java is horrible
+pub fn javaStringHash(str: []const u8) u32 {
+    var hash: u32 = 0;
+    for (str) |ch| {
+        std.debug.assert(ch < 0x80);
+        hash = 31 *% hash +% ch;
+    }
+    return hash;
+}

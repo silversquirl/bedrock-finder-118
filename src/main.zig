@@ -32,10 +32,10 @@ pub fn main() anyerror!void {
         .x = range,
         .y = -60,
         .z = range,
-    }, reportResult, null);
+    }, {}, reportResult, null);
 }
 
-fn reportResult(p: bedrock.Point) void {
+fn reportResult(_: void, p: bedrock.Point) void {
     const out = std.io.getStdOut().writer();
     out.print("{},{},{}\n", .{ p.x, p.y, p.z }) catch @panic("failed to write to stdout");
 }
