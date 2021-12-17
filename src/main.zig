@@ -15,8 +15,8 @@ pub fn main() anyerror!void {
 
     var args = std.process.args();
     std.debug.assert(args.skip());
-    const seed_str = try args.next(&arena.allocator) orelse return error.NotEnoughArgs;
-    const range_str = try args.next(&arena.allocator) orelse return error.NotEnoughArgs;
+    const seed_str = try args.next(arena.allocator()) orelse return error.NotEnoughArgs;
+    const range_str = try args.next(arena.allocator()) orelse return error.NotEnoughArgs;
     const seed = try std.fmt.parseInt(i64, seed_str, 10);
     const range: i32 = try std.fmt.parseInt(u31, range_str, 10);
 
