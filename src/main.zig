@@ -10,13 +10,12 @@ const pattern: []const []const []const ?bedrock.Block = &.{&.{
 }};
 
 pub fn main() anyerror!void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-
-    var args = std.process.args();
+    var args = try std.process.argsWithAllocator(std.heap.page_allocator);
+    defer args.deinit();
     std.debug.assert(args.skip());
-    const seed_str = (try args.next(arena.allocator())) orelse return error.NotEnoughArgs;
-    const range_str = (try args.next(arena.allocator())) orelse return error.NotEnoughArgs;
+
+    const seed_str = args.next() orelse return error.NotEnoughArgs;
+    const range_str = args.next() orelse return error.NotEnoughArgs;
     const seed = try std.fmt.parseInt(i64, seed_str, 10);
     const range: i32 = try std.fmt.parseInt(u31, range_str, 10);
 
