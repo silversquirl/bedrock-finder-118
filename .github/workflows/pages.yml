@@ -1,0 +1,33 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - '**.zig'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-build
+          path: |
+            zig-cache
+
+      - uses: actions/checkout@v2
+      - uses: goto-bus-stop/setup-zig@v1
+        with: {version: master}
+
+      - name: Build web interface
+        run: zig build -Drelease-fast web
+
+      - name: Deploy to GitHub pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          publish_dir: ./zig-out/web
