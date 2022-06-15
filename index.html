@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Bedrock pattern finder (1.18+)</title>
+
+<noscript>
+	<h2>This page requires JavaScript</h2>
+	<p>Please enable JavaScript, or use a browser that supports it.</p>
+
+	<style>
+		main { display: none; }
+	</style>
+</noscript>
+
+<main>
+	<form id="params">
+		<label for="seed">Seed:</label>
+		<input type="text" name="seed">
+
+		<label for="range">Range:</label>
+		<input type="number" name="range" min="0" step="100" value="1000">
+
+		<input type="submit" value="Search">
+	</form>
+
+	<h3 id="status"></h3>
+	<ul id="results"></ul>
+</main>
+
+<script src="main.js"></script>
