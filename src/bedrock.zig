@@ -18,8 +18,10 @@ pub const PatternFinder = struct {
         var it = a.iterTo(b);
         while (it.next()) |p| {
             if (progressFn) |f| {
+                if (count % 1000 == 0) {
+                    f(context, count, total);
+                }
                 count += 1;
-                f(context, count, total);
             }
             if (self.check(p)) {
                 resultFn(context, p);
@@ -62,7 +64,13 @@ pub const Point = packed struct {
     }
 
     pub fn areaTo(a: Point, b: Point) u64 {
-        return @reduce(.Mul, @intCast(std.meta.Vector(3, u64), b.v() - a.v()));
+        return @reduce(
+            .Mul,
+            @intCast(
+                std.meta.Vector(3, u64),
+                b.v() - a.v(),
+            ) + @splat(3, @as(u64, 1)),
+        );
     }
 
     pub fn iterTo(a: Point, b: Point) Iterator {

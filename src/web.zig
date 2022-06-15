@@ -1,6 +1,12 @@
 const std = @import("std");
 const bedrock = @import("bedrock.zig");
 
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace) noreturn {
+    consoleLog(msg.ptr, msg.len);
+    asm volatile ("unreachable");
+    unreachable;
+}
+
 export fn searchInit(
     world_seed: i64,
     gen_type: BedrockGenType,
@@ -52,7 +58,7 @@ export fn searchDeinit(searcher: *AsyncSearcher) void {
 }
 
 const AsyncSearcher = struct {
-    allocator: *std.mem.Allocator,
+    allocator: std.mem.Allocator,
     progress: f64 = 0,
 
     done: bool = false,
@@ -60,7 +66,7 @@ const AsyncSearcher = struct {
     frame_storage: @Frame(search) = undefined,
 
     pub fn init(
-        allocator: *std.mem.Allocator,
+        allocator: std.mem.Allocator,
         finder: bedrock.PatternFinder,
         a: bedrock.Point,
         b: bedrock.Point,
@@ -103,11 +109,16 @@ const AsyncSearcher = struct {
     }
     pub fn reportProgress(self: *AsyncSearcher, completed: u64, total: u64) void {
         const resolution = 10_000;
-        const progress = resolution * completed / total;
-        const fraction = @intToFloat(f64, progress) / resolution;
-        self.progress = fraction;
+        if (total == 0) {
+            self.progress = 1;
+        } else {
+            const progress = resolution * completed / total;
+            const fraction = @intToFloat(f64, progress) / resolution;
+            self.progress = fraction;
+        }
         self.yield();
     }
 };
 
 extern "bedrock" fn resultCallback(x: i32, y: i32, z: i32) void;
+extern "bedrock" fn consoleLog(msg: [*]const u8, len: usize) void;
