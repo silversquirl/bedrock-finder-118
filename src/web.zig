@@ -1,7 +1,7 @@
 const std = @import("std");
 const bedrock = @import("bedrock.zig");
 
-pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace) noreturn {
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     consoleLog(msg.ptr, msg.len);
     asm volatile ("unreachable");
     unreachable;

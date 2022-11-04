@@ -23,6 +23,7 @@ pub fn build(b: *std.build.Builder) !void {
         .arch_os_abi = "wasm32-freestanding",
     }));
     wasm.setBuildMode(mode);
+    wasm.use_stage1 = true;
     wasm.override_dest_dir = .{ .custom = "web" };
     wasm.single_threaded = true;
 
