@@ -124,7 +124,8 @@ pub const GradientGenerator = struct {
             @intToFloat(f64, self.upper_y),
         );
 
-        if (self.rand.at(x, y, z).nextf() < fac) {
+        var rand_at = self.rand.at(x, y, z);
+        if (rand_at.nextf() < fac) {
             return self.lower;
         } else {
             return self.upper;
@@ -173,16 +174,15 @@ pub const Block = enum {
     other,
 };
 
-pub const Random = union(Random.Algorithm) {
+pub const RandomAlgorithm = enum { legacy, xoroshiro };
+pub const Random = union(RandomAlgorithm) {
     legacy: u64,
     xoroshiro: [2]u64,
-
-    pub const Algorithm = enum { legacy, xoroshiro };
 
     const lmagic = 0x5DEECE66D;
     const lmask = ((1 << 48) - 1);
 
-    pub fn init(seed: i64, algo: Algorithm) Random {
+    pub fn init(seed: i64, algo: RandomAlgorithm) Random {
         return switch (algo) {
             .legacy => .{ .legacy = (@bitCast(u64, seed) ^ lmagic) & lmask },
             .xoroshiro => xoroshiroInit(seed128(seed)),
@@ -209,7 +209,7 @@ pub const Random = union(Random.Algorithm) {
         return x ^ (x >> 31);
     }
 
-    pub fn initHash(seed: i64, str: []const u8, algo: Algorithm) Random {
+    pub fn initHash(seed: i64, str: []const u8, algo: RandomAlgorithm) Random {
         var seeder = init(seed, algo);
         switch (algo) {
             .legacy => return init(
@@ -274,7 +274,7 @@ pub const Random = union(Random.Algorithm) {
     }
 };
 
-pub const PosRandom = union(Random.Algorithm) {
+pub const PosRandom = union(RandomAlgorithm) {
     legacy: i64,
     xoroshiro: [2]u64,
 
